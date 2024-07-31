@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const axios = require("axios");
 const { Alchemy, Network } = require("alchemy-sdk");
+const { CovalentClient } = require("@covalenthq/client-sdk");
 
 router.post("/list", async (req, res) => {
   console.log("investmentId:", req.body.investmentId);
@@ -36,7 +37,7 @@ router.post("/list", async (req, res) => {
           const networkPoolDetail = dataPoolDetail.network;
           switch (networkPoolDetail) {
             case "Ethereum":
-              // using scan's api endpoitns:
+              // // using scan's api endpoints:
               // const configScanPoolTxLists = {
               //   method: "get",
               //   url: process.env.API_URL_ETHERSCAN + `/api`,
@@ -61,21 +62,25 @@ router.post("/list", async (req, res) => {
 
               const alchemyPoolLists = new Alchemy(configAlchemyPoolLists);
               const addressContract = dataPoolDetail.contract;
-              const resAlchemyPoolLists = await alchemyPoolLists.core.getAssetTransfers({
-                fromBlock: "0x0",
-                // fromAddress: "0x0000000000000000000000000000000000000000",
-                to: addressContract,
-                excludeZeroValue: true,
-                category: [
-                  "external",
-                  "internal",
-                  "erc20",
-                  "erc721",
-                  "erc1155",
-                ], // "external", "internal", "erc20", "erc721", "erc1155"
-              });
+              const resAlchemyPoolLists =
+                await alchemyPoolLists.core.getAssetTransfers({
+                  fromBlock: "0x0",
+                  // fromAddress: "0x0000000000000000000000000000000000000000",
+                  to: addressContract,
+                  excludeZeroValue: true,
+                  category: [
+                    "external",
+                    "internal",
+                    "erc20",
+                    "erc721",
+                    "erc1155",
+                  ], // "external", "internal", "erc20", "erc721", "erc1155"
+                });
 
-              console.log("resAlchemyPoolLists:", resAlchemyPoolLists.transfers);
+              console.log(
+                "resAlchemyPoolLists:",
+                resAlchemyPoolLists.transfers
+              );
 
             // case "Base":
 
@@ -91,6 +96,34 @@ router.post("/list", async (req, res) => {
     // console.log("arrayPoolsList:", arrayPoolsList);
   } catch (error) {
     console.log("--- error of pool list --- :", error);
+  }
+});
+
+router.post("/token_holders", async (req, res) => {
+  console.log("token address:", req.body.tokenAddress);
+  const tokenAddress = req.body.tokenAddress;
+  const client = new CovalentClient(process.env.API_KEY_COVALENTHQ);
+  const network = "eth-mainnet";
+
+  try {
+    const result = await client.BalanceService.getTokenHoldersV2ForTokenAddress(
+      network,
+      tokenAddress
+    );
+
+    // console.log("token holder:", typeof result);
+    let arrayHolders = [];
+    for await (const resp of client.BalanceService.getTokenHoldersV2ForTokenAddress(
+      network,
+      tokenAddress
+    )) {
+      arrayHolders.push(resp);
+      // console.log("token holder:", Object.keys(resp));
+    }
+
+    console.log("token holders:", arrayHolders[0].address);
+  } catch (error) {
+    console.log("error of token holders", error);
   }
 });
 
