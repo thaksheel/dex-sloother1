@@ -4,6 +4,8 @@ const axios = require("axios");
 const { Alchemy, Network } = require("alchemy-sdk");
 const { CovalentClient } = require("@covalenthq/client-sdk");
 
+const pools = require("@bgd-labs/aave-address-book");
+
 router.post("/list", async (req, res) => {
   console.log("investmentId:", req.body.investmentId);
   try {
@@ -100,30 +102,40 @@ router.post("/list", async (req, res) => {
 });
 
 router.post("/token_holders", async (req, res) => {
+  console.log("network:", req.body.network);
   console.log("token address:", req.body.tokenAddress);
+  const network = req.body.network; // "eth-mainnet"
   const tokenAddress = req.body.tokenAddress;
   const client = new CovalentClient(process.env.API_KEY_COVALENTHQ);
-  const network = "eth-mainnet";
 
   try {
-    const result = await client.BalanceService.getTokenHoldersV2ForTokenAddress(
-      network,
-      tokenAddress
-    );
-
-    // console.log("token holder:", typeof result);
     let arrayHolders = [];
     for await (const resp of client.BalanceService.getTokenHoldersV2ForTokenAddress(
       network,
       tokenAddress
     )) {
-      arrayHolders.push(resp);
       // console.log("token holder:", Object.keys(resp));
+      arrayHolders.push(resp);
     }
-
-    console.log("token holders:", arrayHolders[0].address);
+    console.log("token holders lists:", arrayHolders);
+    console.log("token holders count:", arrayHolders.length);
   } catch (error) {
     console.log("error of token holders", error);
+  }
+});
+
+router.get("/get_all_networks", async (req, res) => {
+  try {
+    let networks = Object.keys(pools);
+    console.log("networks:", networks);
+    if (networks.length !== 0) {
+      return res.json({
+        success: true,
+        networks: networks,
+      });
+    }
+  } catch (error) {
+    console.log("error of getting all networks:", error);
   }
 });
 
