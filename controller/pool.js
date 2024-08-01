@@ -114,11 +114,30 @@ router.post("/token_holders", async (req, res) => {
       network,
       tokenAddress
     )) {
-      // console.log("token holder:", Object.keys(resp));
-      arrayHolders.push(resp);
+      // console.log("token holder:", resp);
+      const objectResp = {
+        contract_decimals: resp.contract_decimals,
+        contract_name: resp.contract_name,
+        contract_ticker_symbol: resp.contract_ticker_symbol,
+        contract_address: resp.contract_address,
+        supports_erc: resp.supports_erc,
+        logo_url: resp.logo_url,
+        address: resp.address,
+        balance: BigInt(resp.balance).toString(),
+        total_supply: BigInt(resp.total_supply).toString(),
+        block_height: resp.block_height,
+      };
+      arrayHolders.push(objectResp);
     }
     console.log("token holders lists:", arrayHolders);
     console.log("token holders count:", arrayHolders.length);
+
+    return res.send({
+      isSuccess: true,
+      network: network,
+      tokenAddress: tokenAddress,
+      holders: arrayHolders,
+    });
   } catch (error) {
     console.log("error of token holders", error);
   }
@@ -127,13 +146,82 @@ router.post("/token_holders", async (req, res) => {
 router.get("/get_all_networks", async (req, res) => {
   try {
     let networks = Object.keys(pools);
-    console.log("networks:", networks);
     if (networks.length !== 0) {
+      console.log("networks:", networks);
       return res.json({
-        success: true,
-        networks: networks,
+        isSuccess: true,
+        assets: networks,
       });
     }
+    return res.json({
+      isSuccess: false,
+    });
+  } catch (error) {
+    console.log("error of getting all networks:", error);
+  }
+});
+
+router.post("/get_network_assets", async (req, res) => {
+  try {
+    let network = req.body.network;
+    console.log("network:", network);
+    let networkAaveV3 = "AaveV3" + network;
+    console.log("networkAaveV3:", networkAaveV3);
+
+    let arrayAssets = pools[networkAaveV3];
+
+    const dataNetworkAssets = {
+      networkName: networkAaveV3,
+    };
+
+    console.log("arrayAssets:", arrayAssets);
+
+    return res.json({
+      isSuccess: false,
+      assets: arrayAssets,
+    });
+  } catch (error) {
+    console.log("error of getting all networks:", error);
+  }
+});
+
+router.get("/get_all_assets", async (req, res) => {
+  const mainnetAaveV3 = [
+    "AaveV3Ethereum",
+    // "AaveV3Polygon",
+    // "AaveV3Avalanche",
+    // "AaveV3Base",
+    // "AaveV3Metis",
+    // "AaveV3Gnosis",r
+    // "AaveV3PolygonZkEvm",
+    // "AaveV3BNB",
+    // "AaveV3Arbitrum",
+    // "AaveV3Optimism",
+    // "AaveV3Scroll",
+    // "AaveV3Fantom",
+    // "AaveV3Harmony",
+    // "AaveV3EthereumLido",
+  ];
+
+  try {
+    for (let i = 0; i < mainnetAaveV3.length; i++) {
+      let detailNetwork = pools[mainnetAaveV3[i]];
+      console.log("detailNetwork:", detailNetwork.ASSETS);
+
+      let objectNetwork = {
+        chainId: detailNetwork.CHAIN_ID,
+        networkName: mainnetAaveV3[i],
+        // assets: ,
+      };
+      // for (let j = 0; j < detailNetwork.ASSETS.length; j++) {
+      //   console.log("detailNetwork:", detailNetwork.ASSETS[j]);
+      // }
+    }
+
+    // return res.json({
+    //   isSuccess: false,
+    //   assets: detailNetwork,
+    // });
   } catch (error) {
     console.log("error of getting all networks:", error);
   }
