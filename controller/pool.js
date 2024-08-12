@@ -182,9 +182,9 @@ router.post("/get_network_assets", async (req, res) => {
 
 router.get("/get_all_assets", async (req, res) => {
   const mainnetAaveV3 = [
-    // "AaveV3Ethereum",
+    "AaveV3Ethereum",
     // "AaveV3Polygon",
-    "AaveV3Avalanche",
+    // "AaveV3Avalanche",
     // "AaveV3Base",
     // "AaveV3Metis",
     // "AaveV3Gnosis",
@@ -305,6 +305,33 @@ router.get("/get_all_assets", async (req, res) => {
       isSuccess: true,
       assets: arrayAllNetworkAssets,
     });
+  } catch (error) {
+    console.log("error of getting all networks:", error);
+  }
+});
+
+router.post("/get_balances", async (req, res) => {
+  console.log("token address:", req.body.addressWallet);
+  try {
+    const client = new CovalentClient("ckey_2b40cb99889a4066ab5a155d5ae");
+    const resp = await client.BalanceService.getTokenBalancesForWalletAddress(
+      "bsc-mainnet",
+      req.body.addressWallet,
+      { quoteCurrency: "USD" }
+    );
+    console.log("resp.data:", resp.data);
+    // const dataResData = resp.data;
+    // const dataResBalances = resp.data.items;
+    // let arrayHolders = [];
+    // for (let i = 0; i < dataResBalances.length; i++) {
+    //   console.log("wallet balances:", dataResBalances[i]);
+    //   const objectResp = dataResBalances[i];
+    //   objectResp.balance = BigInt(resp.balance).toString();
+    //   objectResp.balance_24h = BigInt(resp.balance_24h).toString();
+    //   arrayHolders.push(objectResp);
+    // }
+    // dataResData.items = arrayHolders;
+    return res.json(resp.data);
   } catch (error) {
     console.log("error of getting all networks:", error);
   }
