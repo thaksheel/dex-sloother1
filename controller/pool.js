@@ -3,9 +3,9 @@ const router = express.Router();
 const axios = require("axios");
 const { Alchemy, Network } = require("alchemy-sdk");
 const { CovalentClient } = require("@covalenthq/client-sdk");
-const ethers = require("ether.js");
-
+const { formatUnits } = require("ethers");
 const pools = require("@bgd-labs/aave-address-book");
+const xlsx = require("xlsx");
 
 router.post("/list", async (req, res) => {
   console.log("investmentId:", req.body.investmentId);
@@ -313,25 +313,96 @@ router.get("/get_all_assets", async (req, res) => {
 router.post("/get_balances", async (req, res) => {
   console.log("token address:", req.body.addressWallet);
   try {
-    const client = new CovalentClient("ckey_2b40cb99889a4066ab5a155d5ae");
+    const client = new CovalentClient(process.env.API_KEY_COVALENTHQ);
     const resp = await client.BalanceService.getTokenBalancesForWalletAddress(
-      "bsc-mainnet",
+      "eth-mainnet",
       req.body.addressWallet,
       { quoteCurrency: "USD" }
     );
     console.log("resp.data:", resp.data);
-    // const dataResData = resp.data;
-    // const dataResBalances = resp.data.items;
-    // let arrayHolders = [];
-    // for (let i = 0; i < dataResBalances.length; i++) {
-    //   console.log("wallet balances:", dataResBalances[i]);
-    //   const objectResp = dataResBalances[i];
-    //   objectResp.balance = BigInt(resp.balance).toString();
-    //   objectResp.balance_24h = BigInt(resp.balance_24h).toString();
-    //   arrayHolders.push(objectResp);
-    // }
-    // dataResData.items = arrayHolders;
+    const dataResData = resp.data;
+    const dataResBalances = resp.data.items;
+    let arrayHolders = [];
+    for (let i = 0; i < dataResBalances.length; i++) {
+      console.log("wallet balances:", dataResBalances[i]);
+      const objectResp = dataResBalances[i];
+      objectResp.balance = formatUnits(
+        dataResBalances[i].balance,
+        dataResBalances[i].contract_decimals
+      );
+      objectResp.balance_24h = formatUnits(
+        dataResBalances[i].balance_24h,
+        dataResBalances[i].contract_decimals
+      );
+      arrayHolders.push(objectResp);
+    }
+    dataResData.items = arrayHolders;
     return res.json(resp.data);
+  } catch (error) {
+    console.log("error of getting all networks:", error);
+  }
+});
+
+router.get("/get_all_balances", async (req, res) => {
+  try {
+    // Read the Excel file
+    const workbook = xlsx.readFile("./data/asset_data1.xlsx");
+    // Get the first sheet name
+    const sheetName = workbook.SheetNames[0];
+    // Get the worksheet
+    const worksheet = workbook.Sheets[sheetName];
+    // Convert the worksheet to JSON
+    const dataXlsx = xlsx.utils.sheet_to_json(worksheet);
+
+    const client = new CovalentClient(process.env.API_KEY_COVALENTHQ);
+    const networks = ["eth-mainnet", "bsc-mainnet", "matic-mainnet"];
+
+    let dataAllHoldersBalances = [];
+    for (let i = 0; i < dataXlsx.length; i++) {
+      const addressHolder = dataXlsx[i].wallet_holder_address;
+
+      let dataEachHolderBalances = [];
+      for (let j = 0; j < networks.length; j++) {
+        const resp =
+          await client.BalanceService.getTokenBalancesForWalletAddress(
+            networks[j],
+            addressHolder,
+            { quoteCurrency: "USD" }
+          );
+
+        const dataResData = resp.data;
+        const dataResBalances = resp.data.items;
+        let arrayHolders = [];
+        for (let k = 0; k < dataResBalances.length; k++) {
+          const objectResp = dataResBalances[k];
+          objectResp.balance = formatUnits(
+            dataResBalances[k].balance,
+            dataResBalances[k].contract_decimals
+          );
+          objectResp.balance_24h = formatUnits(
+            dataResBalances[k].balance_24h,
+            dataResBalances[k].contract_decimals
+          );
+          arrayHolders.push(objectResp);
+        }
+        dataResData.items = arrayHolders;
+
+        const eachDataHolderBalances = {
+          network: networks[j],
+          assets: dataResData.items,
+        };
+
+        dataEachHolderBalances.push(eachDataHolderBalances);
+      }
+
+      dataAllHoldersBalances.push({
+        address: addressHolder,
+        balances: dataEachHolderBalances,
+      });
+    }
+
+    console.log("dataAllHoldersBalances:", dataAllHoldersBalances);
+    return res.json(dataAllHoldersBalances);
   } catch (error) {
     console.log("error of getting all networks:", error);
   }
