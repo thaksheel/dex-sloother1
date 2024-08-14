@@ -343,6 +343,139 @@ router.post("/get_balances", async (req, res) => {
   }
 });
 
+// router.get("/get_all_balances", async (req, res) => {
+//   try {
+//     // Read the Excel file
+//     const workbook = xlsx.readFile("./data/asset_data1.xlsx");
+//     // Get the first sheet name
+//     const sheetName = workbook.SheetNames[0];
+//     // Get the worksheet
+//     const worksheet = workbook.Sheets[sheetName];
+//     // Convert the worksheet to JSON
+//     const dataXlsx = xlsx.utils.sheet_to_json(worksheet);
+
+//     const client = new CovalentClient(process.env.API_KEY_COVALENTHQ);
+//     const networks = ["eth-mainnet", "bsc-mainnet", "matic-mainnet"];
+//     console.log("total holders:", dataXlsx.length);
+//     if (dataXlsx.length === 0) {
+//       return res.json({
+//         isSuccess: false,
+//         errorMsg: "Couldn't read xlsx file.",
+//       });
+//     }
+//     let dataAllHoldersBalances = [];
+//     for (let i = 0; i < dataXlsx.length; i++) {
+//       console.log("index holder:", i);
+//       const addressHolder = dataXlsx[i].wallet_holder_address;
+//       // console.log("addressHolder:", addressHolder);
+//       let dataEachHolderBalances = [];
+//       if (addressHolder === "0x000000000000000000000000000000000000dead") {
+//         dataAllHoldersBalances.push({
+//           address: addressHolder,
+//           balances: "DeadWallet",
+//         });
+//       } else {
+//         for (let j = 0; j < networks.length; j++) {
+//           const resp =
+//             await client.BalanceService.getTokenBalancesForWalletAddress(
+//               networks[j],
+//               addressHolder,
+//               { quoteCurrency: "USD" }
+//             );
+//           let dataResData;
+//           if (resp.data === null || resp.data === undefined) {
+//             dataResData = [];
+//           } else {
+//             dataResData = resp.data;
+//           }
+//           // console.log("dataResData:", resp);
+//           if (resp.data.items === null || resp.data.items === undefined) {
+//             dataResData.items = [];
+//           }
+//           const dataResBalances = resp.data.items;
+//           let arrayHolders = [];
+//           for (let k = 0; k < dataResBalances.length; k++) {
+//             const objectResp = dataResBalances[k];
+//             // objectResp.balance = formatUnits(
+//             //   dataResBalances[k].balance,
+//             //   dataResBalances[k].contract_decimals
+//             // );
+//             // objectResp.balance_24h = formatUnits(
+//             //   dataResBalances[k].balance_24h,
+//             //   dataResBalances[k].contract_decimals
+//             // );
+//             objectResp.balance = BigInt(dataResBalances[k].balance).toString();
+//             objectResp.balance_24h = BigInt(
+//               dataResBalances[k].balance_24h
+//             ).toString();
+//             arrayHolders.push(objectResp);
+//           }
+//           dataResData.items = arrayHolders;
+
+//           const eachDataHolderBalances = {
+//             network: networks[j],
+//             assets: dataResData.items,
+//           };
+
+//           dataEachHolderBalances.push(eachDataHolderBalances);
+//         }
+//       }
+
+//       dataAllHoldersBalances.push({
+//         address: addressHolder,
+//         balances: dataEachHolderBalances,
+//       });
+//     }
+
+//     // console.log("dataAllHoldersBalances:", dataAllHoldersBalances);
+//     return res.json({
+//       isSuccess: true,
+//       data: dataAllHoldersBalances,
+//     });
+//   } catch (error) {
+//     console.log("error of getting all networks:", error);
+//   }
+// });
+
+const fetchBalancesForHolder = async (addressHolder) => {
+  // if (addressHolder === "0x000000000000000000000000000000000000dead") {
+  //   return {
+  //     address: addressHolder,
+  //     balances: "DeadWallet",
+  //   };
+  // }
+  const client = new CovalentClient(process.env.API_KEY_COVALENTHQ);
+  const networks = ["eth-mainnet", "bsc-mainnet", "matic-mainnet"];
+  const balancePromises = networks.map(async (network, index) => {
+    const resp = await client.BalanceService.getTokenBalancesForWalletAddress(
+      network,
+      addressHolder,
+      { quoteCurrency: "USD" }
+    );
+
+    const dataResData = resp.data || { items: [] };
+    const dataResBalances = dataResData.items || [];
+
+    const arrayHolders = dataResBalances.map((objectResp) => ({
+      ...objectResp,
+      balance: BigInt(objectResp.balance).toString(),
+      balance_24h: BigInt(objectResp.balance_24h).toString(),
+    }));
+
+    return {
+      network,
+      assets: arrayHolders,
+    };
+  });
+
+  const dataEachHolderBalances = await Promise.all(balancePromises);
+
+  return {
+    address: addressHolder,
+    balances: dataEachHolderBalances,
+  };
+};
+
 router.get("/get_all_balances", async (req, res) => {
   try {
     // Read the Excel file
@@ -354,55 +487,17 @@ router.get("/get_all_balances", async (req, res) => {
     // Convert the worksheet to JSON
     const dataXlsx = xlsx.utils.sheet_to_json(worksheet);
 
-    const client = new CovalentClient(process.env.API_KEY_COVALENTHQ);
-    const networks = ["eth-mainnet", "bsc-mainnet", "matic-mainnet"];
-
-    let dataAllHoldersBalances = [];
-    for (let i = 0; i < dataXlsx.length; i++) {
-      const addressHolder = dataXlsx[i].wallet_holder_address;
-
-      let dataEachHolderBalances = [];
-      for (let j = 0; j < networks.length; j++) {
-        const resp =
-          await client.BalanceService.getTokenBalancesForWalletAddress(
-            networks[j],
-            addressHolder,
-            { quoteCurrency: "USD" }
-          );
-
-        const dataResData = resp.data;
-        const dataResBalances = resp.data.items;
-        let arrayHolders = [];
-        for (let k = 0; k < dataResBalances.length; k++) {
-          const objectResp = dataResBalances[k];
-          objectResp.balance = formatUnits(
-            dataResBalances[k].balance,
-            dataResBalances[k].contract_decimals
-          );
-          objectResp.balance_24h = formatUnits(
-            dataResBalances[k].balance_24h,
-            dataResBalances[k].contract_decimals
-          );
-          arrayHolders.push(objectResp);
-        }
-        dataResData.items = arrayHolders;
-
-        const eachDataHolderBalances = {
-          network: networks[j],
-          assets: dataResData.items,
-        };
-
-        dataEachHolderBalances.push(eachDataHolderBalances);
-      }
-
-      dataAllHoldersBalances.push({
-        address: addressHolder,
-        balances: dataEachHolderBalances,
-      });
-    }
+    const dataAllHoldersBalances = await Promise.all(
+      dataXlsx.map((holder) =>
+        fetchBalancesForHolder(holder.wallet_holder_address)
+      )
+    );
 
     console.log("dataAllHoldersBalances:", dataAllHoldersBalances);
-    return res.json(dataAllHoldersBalances);
+    return res.json({
+      isSuccess: true,
+      data: dataAllHoldersBalances,
+    });
   } catch (error) {
     console.log("error of getting all networks:", error);
   }
