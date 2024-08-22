@@ -181,15 +181,17 @@ router.post("/get_network_assets", async (req, res) => {
 // using GoldRush's SDK
 
 router.get("/get_all_assets", async (req, res) => {
+  // it supports ethereum, polygon and bnb networks for now.
+
   const mainnetAaveV3 = [
     "AaveV3Ethereum",
+    // "AaveV3BNB",
     // "AaveV3Polygon",
     // "AaveV3Avalanche",
     // "AaveV3Base",
     // "AaveV3Metis",
     // "AaveV3Gnosis",
     // "AaveV3PolygonZkEvm",
-    // "AaveV3BNB",
     // "AaveV3Arbitrum",
     // "AaveV3Optimism",
     // "AaveV3Scroll",
@@ -199,114 +201,131 @@ router.get("/get_all_assets", async (req, res) => {
   ];
 
   try {
-    let arrayAllNetworkAssets = [];
-    for (let i = 0; i < mainnetAaveV3.length; i++) {
-      let detailNetwork = pools[mainnetAaveV3[i]];
-      // console.log("detailNetwork:", detailNetwork.ASSETS);
+    const arrayAllNetworkAssets = await Promise.all(
+      mainnetAaveV3.map(async (networkName) => {
+        let detailNetwork = pools[networkName];
 
-      let arrayAssets = Object.entries(detailNetwork.ASSETS).map(
-        ([key, value]) => {
-          return { assetName: key, ...value };
+        let arrayAssets = Object.entries(detailNetwork.ASSETS).map(
+          ([key, value]) => ({
+            assetName: key,
+            ...value,
+          })
+        );
+
+        // console.log("arrayAssets:", arrayAssets);
+
+        let network;
+        switch (networkName) {
+          case "AaveV3Ethereum":
+            network = "eth-mainnet";
+            break;
+          case "AaveV3Polygon":
+            network = "matic-mainnet";
+            break;
+          case "AaveV3BNB":
+            network = "bsc-mainnet";
+            break;
+          case "AaveV3Avalanche":
+            network = "avalanche-mainnet";
+            break;
+          default:
+            network = "not_support";
         }
-      );
-      // console.log("assetsArray:", arrayAssets);
 
-      let network;
-      if (mainnetAaveV3[i] === "AaveV3Ethereum") {
-        network = "eth-mainnet";
-      } else if (mainnetAaveV3[i] === "AaveV3Polygon") {
-        network = "matic-mainnet";
-      } else if (mainnetAaveV3[i] === "AaveV3BNB") {
-        network = "bsc-mainnet";
-      } else if (mainnetAaveV3[i] === "AaveV3Avalanche") {
-        network = "avalanche-mainnet";
-      } else {
-        network = "not_support";
-      }
-      console.log("network:", network);
-
-      const client = new CovalentClient(process.env.API_KEY_COVALENTHQ);
-      let assetDetail = [];
-      for (let j = 0; j < arrayAssets.length; j++) {
-        let tokenHolders = [];
         if (network === "not_support") {
-          tokenHolders.push("not_support");
-          return;
+          return { networkName, assets: "not_support" };
         }
-        const addressAToken = arrayAssets[j].A_TOKEN;
-        console.log("addressAToken:", addressAToken);
 
-        // // using GoldRush's SDK to get all holders
-        // for await (const resp of client.BalanceService.getTokenHoldersV2ForTokenAddress(
-        //   network,
-        //   arrayAssets[j].A_TOKEN,
-        // )) {
-        //   // console.log("token holder:", resp);
+        const assetDetail = await Promise.all(
+          arrayAssets.map(async (asset) => {
+            const addressAToken = asset.A_TOKEN;
+            const urlHolders = `https://api.covalenthq.com/v1/${network}/tokens/${addressAToken}/token_holders_v2/`;
+            const paramsHolders = {
+              key: process.env.API_KEY_COVALENTHQ,
+              "page-number": 0, // top 100 holders
+            };
 
-        //   const objectResp = {
-        //     // contract_decimals: resp.contract_decimals,
-        //     contract_name: resp.contract_name,
-        //     contract_ticker_symbol: resp.contract_ticker_symbol,
-        //     contract_address: resp.contract_address,
-        //     supports_erc: resp.supports_erc,
-        //     logo_url: resp.logo_url,
-        //     address: resp.address,
-        //     balance: BigInt(resp.balance).toString(),
-        //     total_supply: BigInt(resp.total_supply).toString(),
-        //     block_height: resp.block_height,
-        //   };
+            try {
+              const responseTopHolders = await axios.get(urlHolders, {
+                paramsHolders,
+              });
 
-        //   console.log("asset details:", objectResp);
-        //   tokenHolders.push(objectResp);
-        // }
+              const tokenTop100Holders = responseTopHolders.data.data.items.map(
+                (objectResp) =>
+                  // const responseTxHistories =
+                  //   await client.BalanceService.getErc20TransfersForWalletAddress(
+                  //     network,
+                  //     objectResp.address,
+                  //     {
+                  //       contractAddress: objectResp.contract_address,
+                  //       quoteCurrency: "USD",
+                  //     }
+                  //   );
 
-        // using covalenthq's api
-        const url = `https://api.covalenthq.com/v1/${network}/tokens/${addressAToken}/token_holders_v2/`;
-        const params = {
-          key: process.env.API_KEY_COVALENTHQ,
-          "page-number": 0,
+                  // const urlTxHistories = `https://api.covalenthq.com/v1/${network}/address/${objectResp.address}/transfers_v2/`;
+                  // const paramsTxHistories = {
+                  //   key: process.env.API_KEY_COVALENTHQ,
+                  //   "quote-currency": "USD",
+                  //   "contract-address": objectResp.contract_address,
+                  //   // "page-number": 0, // top 100 holders
+                  // };
+                  // const responseTxHistories = await axios.get(urlTxHistories, {
+                  //   paramsTxHistories,
+                  // });
+
+                  // console.log("responseTxHistories:", responseTxHistories.data);
+
+                  ({
+                    ...objectResp,
+                    balanceRaw: objectResp.balance,
+                    balance: formatUnits(
+                      objectResp.balance,
+                      objectResp.contract_decimals
+                    ),
+                  })
+              );
+
+              const tokenHoldersTotalCount =
+                responseTopHolders.data.data.pagination.total_count;
+
+              return {
+                assetName: asset.assetName,
+                decimals: asset.decimals,
+                addressUnderlying: asset.UNDERLYING,
+                addressAToken: asset.A_TOKEN,
+                tokenHoldersTotalCount: tokenHoldersTotalCount,
+                tokenTop100Holders: tokenTop100Holders,
+              };
+            } catch (error) {
+              console.error(
+                `Error fetching token holders for ${asset.assetName}:`,
+                error
+              );
+              return {
+                assetName: asset.assetName,
+                error: "Failed to fetch token holders",
+              };
+            }
+          })
+        );
+
+        return {
+          chainId: detailNetwork.CHAIN_ID,
+          networkName: networkName,
+          assets: assetDetail,
         };
-
-        const responseTopHolders = await axios.get(url, {
-          params: params,
-        });
-
-        // console.log("responseTopHolders:", responseTopHolders.data);
-        tokenHolders = responseTopHolders.data.data.items;
-
-        // console.log("tokenTopHolders:", tokenHolders);
-
-        let assetEach = {
-          assetName: arrayAssets[j].assetName,
-          decimals: arrayAssets[j].decimals,
-          addressUnderlying: arrayAssets[j].UNDERLYING,
-          addressAToken: arrayAssets[j].A_TOKEN,
-          tokenHolders: tokenHolders,
-        };
-
-        assetDetail.push(assetEach);
-      }
-
-      let objectNetwork = {
-        chainId: detailNetwork.CHAIN_ID,
-        networkName: mainnetAaveV3[i],
-        assets: assetDetail,
-      };
-
-      // console.log("objectNetwork:", objectNetwork);
-      arrayAllNetworkAssets.push(objectNetwork);
-      // return res.json({
-      //   isSuccess: true,
-      //   assets: objectNetwork,
-      // });
-    }
+      })
+    );
 
     return res.json({
       isSuccess: true,
       assets: arrayAllNetworkAssets,
     });
   } catch (error) {
-    console.log("error of getting all networks:", error);
+    console.error("Error of getting all networks:", error);
+    return res
+      .status(500)
+      .json({ isSuccess: false, error: "Internal Server Error" });
   }
 });
 
@@ -342,100 +361,6 @@ router.post("/get_balances", async (req, res) => {
     console.log("error of getting all networks:", error);
   }
 });
-
-// router.get("/get_all_balances", async (req, res) => {
-//   try {
-//     // Read the Excel file
-//     const workbook = xlsx.readFile("./data/asset_data1.xlsx");
-//     // Get the first sheet name
-//     const sheetName = workbook.SheetNames[0];
-//     // Get the worksheet
-//     const worksheet = workbook.Sheets[sheetName];
-//     // Convert the worksheet to JSON
-//     const dataXlsx = xlsx.utils.sheet_to_json(worksheet);
-
-//     const client = new CovalentClient(process.env.API_KEY_COVALENTHQ);
-//     const networks = ["eth-mainnet", "bsc-mainnet", "matic-mainnet"];
-//     console.log("total holders:", dataXlsx.length);
-//     if (dataXlsx.length === 0) {
-//       return res.json({
-//         isSuccess: false,
-//         errorMsg: "Couldn't read xlsx file.",
-//       });
-//     }
-//     let dataAllHoldersBalances = [];
-//     for (let i = 0; i < dataXlsx.length; i++) {
-//       console.log("index holder:", i);
-//       const addressHolder = dataXlsx[i].wallet_holder_address;
-//       // console.log("addressHolder:", addressHolder);
-//       let dataEachHolderBalances = [];
-//       if (addressHolder === "0x000000000000000000000000000000000000dead") {
-//         dataAllHoldersBalances.push({
-//           address: addressHolder,
-//           balances: "DeadWallet",
-//         });
-//       } else {
-//         for (let j = 0; j < networks.length; j++) {
-//           const resp =
-//             await client.BalanceService.getTokenBalancesForWalletAddress(
-//               networks[j],
-//               addressHolder,
-//               { quoteCurrency: "USD" }
-//             );
-//           let dataResData;
-//           if (resp.data === null || resp.data === undefined) {
-//             dataResData = [];
-//           } else {
-//             dataResData = resp.data;
-//           }
-//           // console.log("dataResData:", resp);
-//           if (resp.data.items === null || resp.data.items === undefined) {
-//             dataResData.items = [];
-//           }
-//           const dataResBalances = resp.data.items;
-//           let arrayHolders = [];
-//           for (let k = 0; k < dataResBalances.length; k++) {
-//             const objectResp = dataResBalances[k];
-//             // objectResp.balance = formatUnits(
-//             //   dataResBalances[k].balance,
-//             //   dataResBalances[k].contract_decimals
-//             // );
-//             // objectResp.balance_24h = formatUnits(
-//             //   dataResBalances[k].balance_24h,
-//             //   dataResBalances[k].contract_decimals
-//             // );
-//             objectResp.balance = BigInt(dataResBalances[k].balance).toString();
-//             objectResp.balance_24h = BigInt(
-//               dataResBalances[k].balance_24h
-//             ).toString();
-//             arrayHolders.push(objectResp);
-//           }
-//           dataResData.items = arrayHolders;
-
-//           const eachDataHolderBalances = {
-//             network: networks[j],
-//             assets: dataResData.items,
-//           };
-
-//           dataEachHolderBalances.push(eachDataHolderBalances);
-//         }
-//       }
-
-//       dataAllHoldersBalances.push({
-//         address: addressHolder,
-//         balances: dataEachHolderBalances,
-//       });
-//     }
-
-//     // console.log("dataAllHoldersBalances:", dataAllHoldersBalances);
-//     return res.json({
-//       isSuccess: true,
-//       data: dataAllHoldersBalances,
-//     });
-//   } catch (error) {
-//     console.log("error of getting all networks:", error);
-//   }
-// });
 
 const fetchBalancesForHolder = async (addressHolder) => {
   // if (addressHolder === "0x000000000000000000000000000000000000dead") {
