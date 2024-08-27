@@ -252,78 +252,71 @@ router.get("/get_all_assets", async (req, res) => {
                 })
               );
 
-              // let tokenHoldersTxs = tokenTop100Holders.map(
-              //   async (objectResp) => {
-              //     try {
-              //       const urlTxHistories = `https://api.covalenthq.com/v1/${network}/address/${objectResp.address}/transfers_v2/`;
-              //       const paramsTxHistories = {
-              //         key: process.env.API_KEY_COVALENTHQ,
-              //         "quote-currency": "USD",
-              //         "contract-address": objectResp.contract_address,
-              //         "page-number": 0,
-              //       };
-              //       const responseTxHistories = await axios.get(
-              //         urlTxHistories,
-              //         {
-              //           params: paramsTxHistories,
-              //         }
-              //       );
-              //       console.log(
-              //         "responseTxHistories:",
-              //         responseTxHistories.data.data
-              //       );
-              //       let txHistores = responseTxHistories.data.data;
-              //       // if (
-              //       //   responseTxHistories.data.data !== undefined ||
-              //       //   responseTxHistories.data.data !== null
-              //       // ) {
-              //       //   txHistores = responseTxHistories.data.data;
-              //       // }
-
-              //       return {
-              //         ...objectResp,
-              //         txHistories: txHistores,
-              //       };
-              //     } catch (error) {
-              //       console.log("error:", error);
-              //       return null; // Return null or handle the error as needed
-              //     }
-              //   }
-              // );
-
-              // const results = await Promise.all(tokenHoldersTxs);
-
               const tokenHoldersTotalCount =
                 responseTopHolders.data.data.pagination.total_count;
 
-              // using alchemy's api endpoint:
-              const configAlchemyPoolLists = {
-                apiKey: process.env.API_KEY_ALCHEMY,
-                network: network,
+              // // using alchemy's api endpoint:
+              // const configAlchemyPoolLists = {
+              //   apiKey: process.env.API_KEY_ALCHEMY,
+              //   network: network,
+              // };
+
+              // const alchemyPoolLists = new Alchemy(configAlchemyPoolLists);
+              // const addressContract = asset.A_TOKEN;
+              // const resAlchemyPoolLists =
+              //   await alchemyPoolLists.core.getAssetTransfers({
+              //     fromBlock: "0x0",
+              //     // fromAddress: "0x0000000000000000000000000000000000000000",
+              //     to: addressContract,
+              //     excludeZeroValue: true,
+              //     maxCount: 10,
+              //     category: [
+              //       "external",
+              //       "internal",
+              //       "erc20",
+              //       "erc721",
+              //       "erc1155",
+              //     ], // "external", "internal", "erc20", "erc721", "erc1155"
+              //   });
+
+              // console.log(
+              //   "resAlchemyPoolLists:",
+              //   resAlchemyPoolLists.transfers
+              // );
+
+              // // using etherscan's api endpoint:
+              // const configTxHistories = {
+              //   method: "get",
+              //   url: process.env.API_URL_ETHERSCAN + `/api`,
+              //   params: {
+              //     module: "account",
+              //     action: "txlist",
+              //     address: asset.A_TOKEN,
+              //     page: 1,
+              //     offset: 30,
+              //     // startblock: 0,
+              //     // endblock: 99999999,
+              //     sort: "desc", // recent
+              //     apikey: process.env.API_KEY_ETHERSCAN,
+              //   },
+              // };
+              // const resTxs = await axios(configTxHistories);
+
+              // console.log("resTxs:", resTxs.data.result);
+
+              console.log("addressAToken:", addressAToken);
+              const urlTxHistories = `https://api.covalenthq.com/v1/${network}/address/${addressAToken}/transactions_v3/`;
+              const paramsTxHistories = {
+                key: process.env.API_KEY_COVALENTHQ,
+                // "page-number": 0,
+                "quote-currency": "USD",
               };
 
-              const alchemyPoolLists = new Alchemy(configAlchemyPoolLists);
-              const addressContract = asset.A_TOKEN;
-              const resAlchemyPoolLists =
-                await alchemyPoolLists.core.getAssetTransfers({
-                  fromBlock: "0x0",
-                  // fromAddress: "0x0000000000000000000000000000000000000000",
-                  to: addressContract,
-                  excludeZeroValue: true,
-                  maxCount: 10,
-                  category: [
-                    "external",
-                    "internal",
-                    "erc20",
-                    "erc721",
-                    "erc1155",
-                  ], // "external", "internal", "erc20", "erc721", "erc1155"
-                });
+              const resTxHistories = await axios.get(urlTxHistories, {
+                params: paramsTxHistories,
+              });
 
-              console.log(
-                "resAlchemyPoolLists:",
-                resAlchemyPoolLists.transfers
-              );
+              console.log("resTxHistories:", resTxHistories.data.data);
 
               return {
                 assetName: asset.assetName,
@@ -332,7 +325,8 @@ router.get("/get_all_assets", async (req, res) => {
                 addressAToken: asset.A_TOKEN,
                 tokenHoldersTotalCount: tokenHoldersTotalCount,
                 tokenTop100Holders: tokenTop100Holders,
-                txHistories: resAlchemyPoolLists.transfers,
+                // txHistories: resAlchemyPoolLists.transfers,
+                txHistories: resTxHistories.data.data,
               };
             } catch (error) {
               console.error(

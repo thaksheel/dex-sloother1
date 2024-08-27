@@ -214,24 +214,15 @@ router.get("/get_all_assets", async (req, res) => {
 
         // console.log("arrayAssets:", arrayAssets);
 
-        let network;
-        switch (networkName) {
-          case "AaveV3Ethereum":
-            network = "eth-mainnet";
-            break;
-          case "AaveV3Polygon":
-            network = "matic-mainnet";
-            break;
-          case "AaveV3BNB":
-            network = "bsc-mainnet";
-            break;
-          case "AaveV3Avalanche":
-            network = "avalanche-mainnet";
-            break;
-          default:
-            network = "not_support";
-        }
+        const networkMap = {
+          AaveV3Ethereum: "eth-mainnet",
+          AaveV3Polygon: "matic-mainnet",
+          AaveV3BNB: "bsc-mainnet",
+          AaveV3Avalanche: "avalanche-mainnet",
+        };
 
+        const network = networkMap[networkName] || "not_support";
+        // console.log("network:", network);
         if (network === "not_support") {
           return { networkName, assets: "not_support" };
         }
@@ -242,51 +233,97 @@ router.get("/get_all_assets", async (req, res) => {
             const urlHolders = `https://api.covalenthq.com/v1/${network}/tokens/${addressAToken}/token_holders_v2/`;
             const paramsHolders = {
               key: process.env.API_KEY_COVALENTHQ,
-              "page-number": 0, // top 100 holders
+              "page-number": 0,
+              // "page-size": 10,
             };
-
             try {
               const responseTopHolders = await axios.get(urlHolders, {
-                paramsHolders,
+                params: paramsHolders,
               });
 
-              const tokenTop100Holders = responseTopHolders.data.data.items.map(
-                (objectResp) =>
-                  // const responseTxHistories =
-                  //   await client.BalanceService.getErc20TransfersForWalletAddress(
-                  //     network,
-                  //     objectResp.address,
-                  //     {
-                  //       contractAddress: objectResp.contract_address,
-                  //       quoteCurrency: "USD",
-                  //     }
-                  //   );
-
-                  // const urlTxHistories = `https://api.covalenthq.com/v1/${network}/address/${objectResp.address}/transfers_v2/`;
-                  // const paramsTxHistories = {
-                  //   key: process.env.API_KEY_COVALENTHQ,
-                  //   "quote-currency": "USD",
-                  //   "contract-address": objectResp.contract_address,
-                  //   // "page-number": 0, // top 100 holders
-                  // };
-                  // const responseTxHistories = await axios.get(urlTxHistories, {
-                  //   paramsTxHistories,
-                  // });
-
-                  // console.log("responseTxHistories:", responseTxHistories.data);
-
-                  ({
-                    ...objectResp,
-                    balanceRaw: objectResp.balance,
-                    balance: formatUnits(
-                      objectResp.balance,
-                      objectResp.contract_decimals
-                    ),
-                  })
+              let tokenTop100Holders = responseTopHolders.data.data.items.map(
+                (objectResp) => ({
+                  ...objectResp,
+                  balanceRaw: objectResp.balance,
+                  balance: formatUnits(
+                    objectResp.balance,
+                    objectResp.contract_decimals
+                  ),
+                })
               );
+
+              // let tokenHoldersTxs = tokenTop100Holders.map(
+              //   async (objectResp) => {
+              //     try {
+              //       const urlTxHistories = `https://api.covalenthq.com/v1/${network}/address/${objectResp.address}/transfers_v2/`;
+              //       const paramsTxHistories = {
+              //         key: process.env.API_KEY_COVALENTHQ,
+              //         "quote-currency": "USD",
+              //         "contract-address": objectResp.contract_address,
+              //         "page-number": 0,
+              //       };
+              //       const responseTxHistories = await axios.get(
+              //         urlTxHistories,
+              //         {
+              //           params: paramsTxHistories,
+              //         }
+              //       );
+              //       console.log(
+              //         "responseTxHistories:",
+              //         responseTxHistories.data.data
+              //       );
+              //       let txHistores = responseTxHistories.data.data;
+              //       // if (
+              //       //   responseTxHistories.data.data !== undefined ||
+              //       //   responseTxHistories.data.data !== null
+              //       // ) {
+              //       //   txHistores = responseTxHistories.data.data;
+              //       // }
+
+              //       return {
+              //         ...objectResp,
+              //         txHistories: txHistores,
+              //       };
+              //     } catch (error) {
+              //       console.log("error:", error);
+              //       return null; // Return null or handle the error as needed
+              //     }
+              //   }
+              // );
+
+              // const results = await Promise.all(tokenHoldersTxs);
 
               const tokenHoldersTotalCount =
                 responseTopHolders.data.data.pagination.total_count;
+
+              // using alchemy's api endpoint:
+              const configAlchemyPoolLists = {
+                apiKey: process.env.API_KEY_ALCHEMY,
+                network: network,
+              };
+
+              const alchemyPoolLists = new Alchemy(configAlchemyPoolLists);
+              const addressContract = asset.A_TOKEN;
+              const resAlchemyPoolLists =
+                await alchemyPoolLists.core.getAssetTransfers({
+                  fromBlock: "0x0",
+                  // fromAddress: "0x0000000000000000000000000000000000000000",
+                  to: addressContract,
+                  excludeZeroValue: true,
+                  maxCount: 10,
+                  category: [
+                    "external",
+                    "internal",
+                    "erc20",
+                    "erc721",
+                    "erc1155",
+                  ], // "external", "internal", "erc20", "erc721", "erc1155"
+                });
+
+              console.log(
+                "resAlchemyPoolLists:",
+                resAlchemyPoolLists.transfers
+              );
 
               return {
                 assetName: asset.assetName,
@@ -295,6 +332,7 @@ router.get("/get_all_assets", async (req, res) => {
                 addressAToken: asset.A_TOKEN,
                 tokenHoldersTotalCount: tokenHoldersTotalCount,
                 tokenTop100Holders: tokenTop100Holders,
+                txHistories: resAlchemyPoolLists.transfers,
               };
             } catch (error) {
               console.error(
